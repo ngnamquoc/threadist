@@ -38,4 +38,5 @@ yarn-error.*
 
 #local-dev
 LOCAL_DEV_GUIDE.md
+README.md
 
