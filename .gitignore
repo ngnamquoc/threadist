@@ -35,3 +35,7 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
+
+#local-dev
+LOCAL_DEV_GUIDE.md
+
