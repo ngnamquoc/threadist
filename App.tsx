@@ -9,9 +9,12 @@ import SignUpScreen from './src/screens/SignUpScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import EmailConfirmationScreen from './src/screens/EmailConfirmationScreen';
 import InterestsScreen from './src/screens/InterestsScreen';
+import InterestSelectionScreen from './src/screens/InterestSelectionScreen';
+import SubredditSelectionScreen from './src/screens/SubredditSelectionScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import theme from './src/styles/theme';
 import { AuthUser, authService } from './src/services/authService';
+import { interestsService } from './src/services/interestsService';
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
@@ -20,6 +23,30 @@ export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const checkUserOnboardingStatus = async (user: AuthUser) => {
+    // Check if email is confirmed first
+    if (!authService.isEmailConfirmed(user)) {
+      setCurrentScreen('EmailConfirmation');
+      return;
+    }
+
+    // Check if user has completed interests selection
+    const { hasCompleted, error } = await interestsService.hasUserCompletedInterestSelection(user.id);
+    
+    if (error) {
+      console.error('Error checking interest completion:', error);
+      // Default to interests screen if we can't determine status
+      setCurrentScreen('Interests');
+      return;
+    }
+
+    if (hasCompleted) {
+      setCurrentScreen('Home');
+    } else {
+      setCurrentScreen('Interests');
+    }
+  };
 
   useEffect(() => {
     // Auto sign out on app reload/restart (useful for development)
@@ -38,16 +65,7 @@ export default function App() {
       // Navigate based on auth state after splash screen
       if (!showSplash) {
         if (user) {
-          // Check if email is confirmed first
-          if (!authService.isEmailConfirmed(user)) {
-            setCurrentScreen('EmailConfirmation');
-          }
-          // Then check if user has completed interests selection
-          else if (!user.user_metadata?.interests) {
-            setCurrentScreen('Interests');
-          } else {
-            setCurrentScreen('Home');
-          }
+          checkUserOnboardingStatus(user);
         } else {
           setCurrentScreen('Welcome');
         }
@@ -61,16 +79,7 @@ export default function App() {
     setShowSplash(false);
     // Navigate based on current auth state
     if (user) {
-      // Check if email is confirmed first
-      if (!authService.isEmailConfirmed(user)) {
-        setCurrentScreen('EmailConfirmation');
-      }
-      // Then check if user has completed interests selection
-      else if (!user.user_metadata?.interests) {
-        setCurrentScreen('Interests');
-      } else {
-        setCurrentScreen('Home');
-      }
+      checkUserOnboardingStatus(user);
     } else {
       setCurrentScreen('Welcome');
     }
@@ -101,6 +110,10 @@ export default function App() {
         return <EmailConfirmationScreen navigation={{ navigate }} user={screenProps.user || user} />;
       case 'Interests':
         return <InterestsScreen navigation={{ navigate }} user={user} />;
+      case 'InterestSelection':
+        return <InterestSelectionScreen navigation={{ navigate }} user={user} />;
+      case 'SubredditSelection':
+        return <SubredditSelectionScreen navigation={{ navigate }} user={user} selectedCategories={screenProps.selectedCategories} />;
       case 'Home':
         return <HomeScreen navigation={{ navigate }} user={user} />;
       case 'Welcome':
