@@ -13,6 +13,7 @@ import {
   Alert,
 } from 'react-native';
 import theme, { MaterialIcons } from '../styles/theme';
+import { authService } from '../services/authService';
 
 interface LoginScreenProps {
   navigation?: any; // You can replace with proper navigation type
@@ -31,9 +32,25 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 
     setIsLoading(true);
     try {
-      // Navigate to interests screen
+      const { user, error } = await authService.signIn(email, password);
+      
+      if (error) {
+        Alert.alert('Login Failed', error.message);
+        return;
+      }
+
+      if (user) {
+        // Check if email needs confirmation
+        if (!authService.isEmailConfirmed(user)) {
+          navigation?.navigate('EmailConfirmation', { user });
+        } else if (!user.user_metadata?.interests) {
+          navigation?.navigate('Interests');
+        } else {
+          navigation?.navigate('Home');
+        }
+      }
     } catch (error: any) {
-      Alert.alert('Login Failed', error.message);
+      Alert.alert('Login Failed', error.message || 'An unexpected error occurred');
     } finally {
       setIsLoading(false);
     }
@@ -42,9 +59,18 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     try {
-      // Navigate to interests screen
+      const { user, error } = await authService.signInWithGoogle();
+      
+      if (error) {
+        Alert.alert('Google Login Failed', error.message);
+        return;
+      }
+
+      if (!user) {
+        Alert.alert('Login Failed', 'Unable to complete Google login. Please try again.');
+      }
     } catch (error: any) {
-      Alert.alert('Google Login Failed', error.message);
+      Alert.alert('Google Login Failed', error.message || 'An unexpected error occurred');
     } finally {
       setIsLoading(false);
     }

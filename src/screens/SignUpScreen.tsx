@@ -13,6 +13,7 @@ import {
   Alert,
 } from 'react-native';
 import theme, { MaterialIcons } from '../styles/theme';
+import { authService } from '../services/authService';
 
 interface SignUpScreenProps {
   navigation?: any;
@@ -32,9 +33,26 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
 
     setIsLoading(true);
     try {
-  
+      const { user, error } = await authService.signUp(email, password);
+      
+      if (error) {
+        Alert.alert('Sign Up Failed', error.message);
+        return;
+      }
+
+      if (user) {
+        // Check if email needs confirmation
+        if (!authService.isEmailConfirmed(user)) {
+          // For new signups, always go to email confirmation first
+          navigation?.navigate('EmailConfirmation', { user });
+        } else if (!user.user_metadata?.interests) {
+          navigation?.navigate('Interests');
+        } else {
+          navigation?.navigate('Home');
+        }
+      }
     } catch (error: any) {
-      Alert.alert('Sign Up Failed', error.message);
+      Alert.alert('Sign Up Failed', error.message || 'An unexpected error occurred');
     } finally {
       setIsLoading(false);
     }
@@ -43,8 +61,23 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
   const handleGoogleSignUp = async () => {
     setIsLoading(true);
     try {
+      const { user, error } = await authService.signInWithGoogle();
+      
+      if (error) {
+        Alert.alert('Google Sign Up Failed', error.message);
+        return;
+      }
+
+      if (user) {
+        // Navigate to interests screen or home based on user's completion status
+        if (!user.user_metadata?.interests) {
+          navigation?.navigate('Interests');
+        } else {
+          navigation?.navigate('Home');
+        }
+      }
     } catch (error: any) {
-      Alert.alert('Google Sign Up Failed', error.message);
+      Alert.alert('Google Sign Up Failed', error.message || 'An unexpected error occurred');
     } finally {
       setIsLoading(false);
     }

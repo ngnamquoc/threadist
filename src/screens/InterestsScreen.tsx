@@ -11,9 +11,11 @@ import {
   Alert,
 } from 'react-native';
 import theme from '../styles/theme';
+import { AuthUser, authService } from '../services/authService';
 
 interface InterestsScreenProps {
   navigation?: any;
+  user?: AuthUser | null;
 }
 
 const INTERESTS = [
@@ -34,7 +36,7 @@ const INTERESTS = [
   'Success Stories',
 ];
 
-const InterestsScreen: React.FC<InterestsScreenProps> = ({ navigation }) => {
+const InterestsScreen: React.FC<InterestsScreenProps> = ({ navigation, user }) => {
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -56,8 +58,14 @@ const InterestsScreen: React.FC<InterestsScreenProps> = ({ navigation }) => {
 
     setIsLoading(true);
     try {
-      // Here you would normally save the interests to your backend
-      console.log('Selected interests:', selectedInterests);
+      if (user?.id) {
+        const { error } = await authService.saveUserInterests(user.id, selectedInterests);
+        
+        if (error) {
+          Alert.alert('Error', error.message || 'Failed to save interests');
+          return;
+        }
+      }
       
       // Navigate to main app (home screen)
       navigation?.navigate('Home');
