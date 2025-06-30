@@ -18,8 +18,12 @@ import theme from '../styles/theme';
 import { AuthUser, authService } from '../services/authService';
 import { apiService, RedditPost, StoryRecommendation } from '../services/apiService';
 import { audioService, AudioPlayerState } from '../services/audioService';
+import { interestsService, InterestCategory } from '../services/interestsService';
 import StoryCard from '../components/StoryCard';
 import AudioPlayer from '../components/AudioPlayer';
+import BottomNavigation from '../components/BottomNavigation';
+import ExploreScreen from './ExploreScreen';
+import EnhancedStoryCard from '../components/EnhancedStoryCard';
 
 interface HomeScreenProps {
   navigation?: any;
@@ -27,15 +31,17 @@ interface HomeScreenProps {
 }
 
 const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, user }) => {
-  const [stories, setStories] = useState<RedditPost[]>([]);
-  const [recommendations, setRecommendations] = useState<StoryRecommendation[]>([]);
+  const [activeTab, setActiveTab] = useState<'for-you' | 'explore'>('for-you');
+  const [hotThreadStories, setHotThreadStories] = useState<RedditPost[]>([]);
+  const [followedStories, setFollowedStories] = useState<RedditPost[]>([]);
+  const [recommendedStories, setRecommendedStories] = useState<RedditPost[]>([]);
+  const [userInterestSections, setUserInterestSections] = useState<Array<{
+    category: InterestCategory;
+    stories: RedditPost[];
+  }>>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<RedditPost[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [activeTab, setActiveTab] = useState<'recommended' | 'trending' | 'search'>('recommended');
-  const [audioLoading, setAudioLoading] = useState<string | null>(null); // Track which story is loading
+  const [audioLoading, setAudioLoading] = useState<string | null>(null);
   const [playerState, setPlayerState] = useState<AudioPlayerState>({
     isPlaying: false,
     isPaused: false,
@@ -53,17 +59,144 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, user }) => {
     };
   }, []);
 
+  const loadUserInterestSections = async (userId: string, allStories: RedditPost[], usedStories: RedditPost[] = []) => {
+    try {
+      const { interestsData, error } = await interestsService.getUserInterestsWithCategories(userId);
+      
+      if (error || !interestsData) {
+        console.error('Error loading user interests:', error);
+        return;
+      }
+
+      // Get IDs of already used stories to avoid duplicates
+      const usedStoryIds = new Set(usedStories.map(story => story.id));
+
+      // Create sections for each user interest category
+      const sections = interestsData.map(({ category, subreddits }) => {
+        // Find stories from the user's interested subreddits that haven't been used
+        const categoryStories = allStories.filter(story => 
+          !usedStoryIds.has(story.id) && 
+          subreddits.some(subreddit => 
+            story.subreddit.toLowerCase() === subreddit.toLowerCase()
+          )
+        );
+
+        // If we don't have enough stories from this category, supplement with related ones
+        const diverseStories = createDiverseStoriesForCategory(categoryStories, allStories, subreddits, usedStoryIds);
+
+        // Add the selected stories to the used set to prevent future duplicates
+        diverseStories.forEach(story => usedStoryIds.add(story.id));
+
+        return {
+          category,
+          stories: diverseStories.slice(0, 6) // Limit to 6 stories per section
+        };
+      }).filter(section => section.stories.length > 0); // Only include sections with stories
+
+      setUserInterestSections(sections);
+    } catch (error) {
+      console.error('Error in loadUserInterestSections:', error);
+    }
+  };
+
+  const createDiverseStoriesForCategory = (
+    categoryStories: RedditPost[], 
+    allStories: RedditPost[], 
+    targetSubreddits: string[],
+    usedStoryIds: Set<string> = new Set()
+  ): RedditPost[] => {
+    const diverseStories = [...categoryStories];
+    
+    // If we need more stories, find similar ones or trending content
+    if (diverseStories.length < 4) {
+      const additionalStories = allStories.filter(story => 
+        !diverseStories.some(existing => existing.id === story.id) &&
+        !usedStoryIds.has(story.id) &&
+        !targetSubreddits.some(subreddit => 
+          story.subreddit.toLowerCase() === subreddit.toLowerCase()
+        )
+      );
+      
+      // Add random stories to fill the section
+      while (diverseStories.length < 6 && additionalStories.length > 0) {
+        const randomIndex = Math.floor(Math.random() * additionalStories.length);
+        diverseStories.push(additionalStories.splice(randomIndex, 1)[0]);
+      }
+    }
+
+    return diverseStories;
+  };
+
+  const createDiverseFollowedStories = (allStories: RedditPost[]): RedditPost[] => {
+    // Ensure we have diverse subreddits for followed stories
+    const targetSubreddits = [
+      'technology', 'gaming', 'movies', 'music', 'news', 'science', 
+      'fitness', 'cooking', 'books', 'sports', 'funny', 'askreddit'
+    ];
+    
+    const diverseStories: RedditPost[] = [];
+    const usedSubreddits = new Set<string>();
+    
+    // First, try to get stories from target subreddits
+    for (const targetSub of targetSubreddits) {
+      const story = allStories.find(s => 
+        s.subreddit.toLowerCase() === targetSub && !usedSubreddits.has(s.subreddit)
+      );
+      if (story && diverseStories.length < 6) {
+        diverseStories.push(story);
+        usedSubreddits.add(story.subreddit);
+      }
+    }
+    
+    // Fill remaining slots with unique subreddits from available stories
+    for (const story of allStories) {
+      if (!usedSubreddits.has(story.subreddit) && diverseStories.length < 6) {
+        diverseStories.push(story);
+        usedSubreddits.add(story.subreddit);
+      }
+    }
+    
+    return diverseStories;
+  };
+
   const loadInitialData = async () => {
     setLoading(true);
     try {
+      // Load hot thread of the day (trending stories)
+      const trending = await apiService.getTrendingStories(15); // Get more for diversity
+      const hotStories = trending.map(rec => rec.post);
+      setHotThreadStories(hotStories);
+
       if (user?.id) {
-        const recs = await apiService.getRecommendedStories(user.id, 15);
-        setRecommendations(recs);
-        setStories(recs.map(rec => rec.post));
+        // Load personalized recommendations
+        const recs = await apiService.getRecommendedStories(user.id, 20); // Get more for diversity
+        const recStories = recs.map(rec => rec.post);
+        setRecommendedStories(recStories);
+        
+        // Create diverse followed stories from combined data
+        const combinedStories = [
+          ...hotStories,
+          ...recStories
+        ];
+        
+        const diverseFollowedStories = createDiverseFollowedStories(combinedStories);
+        setFollowedStories(diverseFollowedStories);
+
+        // Load personalized interest-based sections
+        await loadUserInterestSections(user.id, combinedStories, [
+          ...hotStories,
+          ...diverseFollowedStories,
+          ...recStories
+        ]);
       } else {
-        const trending = await apiService.getTrendingStories(15);
-        setRecommendations(trending);
-        setStories(trending.map(rec => rec.post));
+        // For non-authenticated users, show trending content with diversity
+        setRecommendedStories(hotStories.slice(3, 8));
+        
+        const diverseFollowedStories = createDiverseFollowedStories(hotStories);
+        setFollowedStories(diverseFollowedStories);
+        
+        // Clear user interest sections for non-authenticated users
+        setUserInterestSections([]);
       }
     } catch (error) {
       console.error('Error loading stories:', error);
@@ -77,26 +210,6 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, user }) => {
     setRefreshing(true);
     await loadInitialData();
     setRefreshing(false);
-  };
-
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) {
-      setSearchResults([]);
-      setIsSearching(false);
-      return;
-    }
-
-    setIsSearching(true);
-    try {
-      const results = await apiService.searchStories(searchQuery, undefined, 20);
-      setSearchResults(results);
-      setActiveTab('search');
-    } catch (error) {
-      console.error('Error searching stories:', error);
-      Alert.alert('Error', 'Failed to search stories');
-    } finally {
-      setIsSearching(false);
-    }
   };
 
   const handleStoryPress = async (story: RedditPost) => {
@@ -137,129 +250,156 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, user }) => {
     }
   };
 
-  const renderStoryItem = ({ item }: { item: RedditPost }) => (
-    <StoryCard
-      story={item}
+  const renderStoryCard = (story: RedditPost, size: 'small' | 'large' = 'large', sectionKey: string = '') => (
+    <EnhancedStoryCard
+      story={story}
       onPress={handleStoryPress}
-      isPlaying={playerState.isPlaying && playerState.currentStory?.id === item.id}
-      isLoading={audioLoading === item.id}
+      isPlaying={playerState.isPlaying && playerState.currentStory?.id === story.id}
+      isLoading={audioLoading === story.id}
+      size={size}
     />
   );
 
-  const renderRecommendationItem = ({ item }: { item: StoryRecommendation }) => (
-    <StoryCard
-      story={item.post}
-      onPress={handleStoryPress}
-      isPlaying={playerState.isPlaying && playerState.currentStory?.id === item.post.id}
-      isLoading={audioLoading === item.post.id}
-    />
-  );
+  const renderSection = (title: string, stories: RedditPost[], sectionKey: string, cardSize: 'small' | 'large' = 'large') => {
+    // Generate subtitle based on section title
+    const getSubtitle = (sectionTitle: string) => {
+      if (sectionTitle === 'Hot Thread of the Day') {
+        return 'Top-voted drama picked by our curators';
+      } else if (sectionTitle === 'Followed Subreddits') {
+        return 'Trending stories from topics you follow';
+      } else if (sectionTitle === 'Recommended for you') {
+        return 'We think you\'ll like these';
+      } else if (sectionTitle.includes('🔥')) {
+        return 'Stories & humor from your interests';
+      } else if (sectionTitle.includes('👻')) {
+        return 'Horror stories you subscribed to';
+      } else if (sectionTitle.includes('❤️')) {
+        return 'Relationship advice and moral dilemmas';
+      } else if (sectionTitle.includes('🤯')) {
+        return 'Mind-blowing facts and mysteries';
+      } else if (sectionTitle.includes('💡')) {
+        return 'Self-improvement and motivation';
+      } else if (sectionTitle.includes('🎬')) {
+        return 'Pop culture and entertainment';
+      } else {
+        return 'Personalized content based on your interests';
+      }
+    };
 
-  const renderTabButton = (
-    title: string,
-    tab: 'recommended' | 'trending' | 'search',
-    icon: string
-  ) => (
-    <TouchableOpacity
-      style={[styles.tabButton, activeTab === tab && styles.activeTabButton]}
-      onPress={() => setActiveTab(tab)}
-    >
-      <Ionicons
-        name={icon as any}
-        size={20}
-        color={activeTab === tab ? theme.colors.primary.orange : theme.colors.neutral.gray[400]}
-      />
-      <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
-        {title}
-      </Text>
-    </TouchableOpacity>
-  );
-
-  const getCurrentData = () => {
-    switch (activeTab) {
-      case 'recommended':
-        return recommendations.map(rec => rec.post);
-      case 'trending':
-        return stories;
-      case 'search':
-        return searchResults;
-      default:
-        return [];
-    }
+    return (
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>{title}</Text>
+          <Text style={styles.sectionSubtitle}>{getSubtitle(title)}</Text>
+        </View>
+        <FlatList
+          data={stories.slice(0, 6)} // Show more items for horizontal scrolling
+          renderItem={({ item, index }) => renderStoryCard(item, 'small', sectionKey)} // Pass section key
+          keyExtractor={(item, index) => `${sectionKey}-${item.id}-${index}`} // Create unique key with index
+          horizontal={true} // Make all sections horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.horizontalList}
+          ItemSeparatorComponent={() => <View style={{ width: 0 }} />} // No separator needed as margin is handled in card
+        />
+      </View>
+    );
   };
+
+  const handleTabPress = (tab: 'for-you' | 'explore') => {
+    setActiveTab(tab);
+  };
+
+  const renderForYouContent = () => (
+    <>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>For You</Text>
+        <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+          <Ionicons name="log-out-outline" size={20} color={theme.colors.neutral.white} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Content */}
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary.orange} />
+          <Text style={styles.loadingText}>Loading stories...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={[
+            { type: 'hot', stories: hotThreadStories },
+            { type: 'followed', stories: followedStories },
+            ...userInterestSections.map((section, index) => ({
+              type: `interest-${section.category.category_id}-${index}`, // Use category ID for uniqueness
+              category: section.category,
+              stories: section.stories
+            })),
+            { type: 'recommended', stories: recommendedStories }
+          ]}
+          renderItem={({ item }: { item: any }) => {
+            switch (item.type) {
+              case 'hot':
+                return renderSection('Hot Thread of the Day', item.stories, 'hot');
+              case 'followed':
+                return renderSection('Followed Subreddits', item.stories, 'followed');
+              case 'recommended':
+                return renderSection('Recommended for you', item.stories, 'recommended');
+              default:
+                // Handle user interest sections
+                if (item.type.startsWith('interest-') && item.category) {
+                  return renderSection(
+                    `${item.category.emoji} ${item.category.label}`, 
+                    item.stories,
+                    item.type
+                  );
+                }
+                return null;
+            }
+          }}
+          keyExtractor={(item) => item.type}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={theme.colors.primary.orange}
+            />
+          }
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.mainContent}
+        />
+      )}
+    </>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.primary.blue} />
       
-      <LinearGradient
-        colors={[theme.colors.primary.blue, theme.colors.primary.blue + 'DD']}
-        style={styles.header}
-      >
-        <View style={styles.headerTop}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.greeting}>Good {getGreeting()}</Text>
-            <Text style={styles.userName}>{user?.email?.split('@')[0] || 'User'}</Text>
-          </View>
-          <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-            <Ionicons name="log-out-outline" size={20} color={theme.colors.neutral.white} />
-          </TouchableOpacity>
-        </View>
+      {activeTab === 'for-you' ? renderForYouContent() : (
+        <ExploreScreen navigation={navigation} user={user} />
+      )}
 
-        <View style={styles.searchContainer}>
-          <View style={styles.searchInputContainer}>
-            <Ionicons name="search" size={20} color={theme.colors.neutral.gray[400]} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search stories..."
-              placeholderTextColor={theme.colors.neutral.gray[400]}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              onSubmitEditing={handleSearch}
-              returnKeyType="search"
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <Ionicons name="close-circle" size={20} color={theme.colors.neutral.gray[400]} />
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
-        <View style={styles.tabsContainer}>
-          {renderTabButton('Recommended', 'recommended', 'heart')}
-          {renderTabButton('Trending', 'trending', 'trending-up')}
-          {searchResults.length > 0 && renderTabButton('Search', 'search', 'search')}
-        </View>
-      </LinearGradient>
-
-      <View style={styles.content}>
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={theme.colors.primary.orange} />
-            <Text style={styles.loadingText}>Loading stories...</Text>
-          </View>
-        ) : (
-          <FlatList
-            data={getCurrentData()}
-            renderItem={renderStoryItem}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.storiesList}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={handleRefresh}
-                tintColor={theme.colors.primary.orange}
-              />
-            }
-            showsVerticalScrollIndicator={false}
-          />
-        )}
-      </View>
-
+      {/* Audio Player */}
       {playerState.isLoaded && <AudioPlayer />}
+
+      {/* Bottom Navigation */}
+      <BottomNavigation activeTab={activeTab} onTabPress={handleTabPress} />
     </SafeAreaView>
   );
+};
+
+const formatTime = (timestamp: number) => {
+  const now = Date.now() / 1000;
+  const diff = now - timestamp;
+  
+  if (diff < 3600) {
+    return `${Math.floor(diff / 60)}m ago`;
+  } else if (diff < 86400) {
+    return `${Math.floor(diff / 3600)}h ago`;
+  } else {
+    return `${Math.floor(diff / 86400)}d ago`;
+  }
 };
 
 const getGreeting = () => {
@@ -272,31 +412,20 @@ const getGreeting = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.neutral.gray[900],
+    backgroundColor: theme.colors.primary.blue,
   },
   header: {
-    paddingTop: theme.spacing.lg,
-    paddingHorizontal: theme.spacing.lg,
-    paddingBottom: theme.spacing.md,
-  },
-  headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.lg,
+    paddingBottom: theme.spacing.md,
   },
-  headerLeft: {
-    flex: 1,
-  },
-  greeting: {
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.neutral.gray[300],
-    fontFamily: 'CeraPro-Regular',
-  },
-  userName: {
-    fontSize: theme.fontSize.xl,
-    color: theme.colors.neutral.white,
+  headerTitle: {
+    fontSize: theme.fontSize['2xl'],
     fontWeight: theme.fontWeight.bold as any,
+    color: theme.colors.neutral.white,
     fontFamily: 'CeraPro-Bold',
   },
   signOutButton: {
@@ -307,56 +436,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  searchContainer: {
-    marginBottom: theme.spacing.lg,
-  },
-  searchInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: theme.borderRadius.lg,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    color: theme.colors.neutral.white,
-    fontSize: theme.fontSize.base,
-    marginLeft: theme.spacing.sm,
-    fontFamily: 'CeraPro-Regular',
-  },
-  tabsContainer: {
-    flexDirection: 'row',
-    gap: theme.spacing.md,
-  },
-  tabButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.borderRadius.md,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  activeTabButton: {
-    backgroundColor: theme.colors.primary.orange,
-  },
-  tabText: {
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.neutral.gray[300],
-    marginLeft: theme.spacing.xs,
-    fontFamily: 'CeraPro-Medium',
-  },
-  activeTabText: {
-    color: theme.colors.neutral.white,
-  },
-  content: {
-    flex: 1,
-    backgroundColor: theme.colors.neutral.gray[900],
+  mainContent: {
+    paddingBottom: 120, // Extra space for bottom navigation
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: theme.colors.neutral.gray[900],
   },
   loadingText: {
     fontSize: theme.fontSize.base,
@@ -364,9 +451,31 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.md,
     fontFamily: 'CeraPro-Regular',
   },
-  storiesList: {
-    padding: theme.spacing.lg,
-    paddingBottom: 100,
+  section: {
+    backgroundColor: theme.colors.neutral.gray[900],
+    paddingVertical: theme.spacing.lg,
+  },
+  sectionHeader: {
+    paddingHorizontal: theme.spacing.lg,
+    marginBottom: theme.spacing.md,
+  },
+  sectionTitle: {
+    fontSize: theme.fontSize.xl,
+    fontWeight: theme.fontWeight.bold as any,
+    color: theme.colors.neutral.white,
+    fontFamily: 'CeraPro-Bold',
+    marginBottom: theme.spacing.xs,
+  },
+  sectionSubtitle: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.neutral.gray[400],
+    fontFamily: 'CeraPro-Regular',
+  },
+  horizontalList: {
+    paddingHorizontal: theme.spacing.lg,
+  },
+  verticalList: {
+    paddingHorizontal: theme.spacing.lg,
   },
 });
 

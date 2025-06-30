@@ -163,6 +163,67 @@ class InterestsService {
     }
   }
 
+  // Get user's interests with category details and subreddits
+  async getUserInterestsWithCategories(userId: string): Promise<{ 
+    interestsData: Array<{
+      category: InterestCategory;
+      subreddits: string[];
+    }> | null; 
+    error: any 
+  }> {
+    try {
+      const { data, error } = await supabase
+        .from('user_interests')
+        .select(`
+          csid,
+          weight,
+          category_subreddits!inner (
+            subreddit,
+            category_id,
+            interest_categories!inner (
+              category_id,
+              slug,
+              label,
+              emoji,
+              description
+            )
+          )
+        `)
+        .eq('user_id', userId);
+
+      if (error) {
+        console.error('Get user interests with categories error:', error);
+        return { interestsData: null, error };
+      }
+
+      // Group by category
+      const categoryMap = new Map<string, {
+        category: InterestCategory;
+        subreddits: string[];
+      }>();
+
+      data?.forEach((item: any) => {
+        const category = item.category_subreddits.interest_categories;
+        const subreddit = item.category_subreddits.subreddit;
+        
+        if (!categoryMap.has(category.category_id)) {
+          categoryMap.set(category.category_id, {
+            category: category,
+            subreddits: []
+          });
+        }
+        
+        categoryMap.get(category.category_id)!.subreddits.push(subreddit);
+      });
+
+      const interestsData = Array.from(categoryMap.values());
+      return { interestsData, error: null };
+    } catch (error: any) {
+      console.error('Get user interests with categories exception:', error);
+      return { interestsData: null, error: { message: error.message || 'Failed to fetch user interests with categories' } };
+    }
+  }
+
   // Check if user has completed interest selection
   async hasUserCompletedInterestSelection(userId: string): Promise<{ hasCompleted: boolean; error: any }> {
     try {
