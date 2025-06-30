@@ -28,6 +28,7 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isManualNavigation, setIsManualNavigation] = useState(false);
+  const [allowAuthNavigation, setAllowAuthNavigation] = useState(false);
 
   const checkUserOnboardingStatus = async (user: AuthUser) => {
     // Check if email is confirmed first
@@ -73,21 +74,24 @@ export default function App() {
       console.log('🔐 Current screen:', currentScreen);
       console.log('🔐 Show splash:', showSplash);
       console.log('🔐 Is manual navigation:', isManualNavigation);
+      console.log('🔐 Allow auth navigation:', allowAuthNavigation);
       
       setUser(user);
       setSession(session);
       
-      // Only navigate based on auth state if not manually navigating and splash is done
-      if (!showSplash && !isManualNavigation) {
+      // Only navigate based on auth state if conditions are met
+      if (!showSplash && !isManualNavigation && allowAuthNavigation && 
+          currentScreen !== 'Welcome' && currentScreen !== 'SignUp' && currentScreen !== 'Login') {
         if (user) {
           console.log('🔐 User exists, checking onboarding status...');
           checkUserOnboardingStatus(user);
         } else {
           console.log('🔐 No user, navigating to Welcome');
           setCurrentScreen('Welcome');
+          setNavigationHistory(['Welcome']);
         }
       } else {
-        console.log('🔐 Skipping auth navigation - manual navigation or splash showing');
+        console.log('🔐 Skipping auth navigation - conditions not met');
       }
     });
 
@@ -96,15 +100,22 @@ export default function App() {
 
   const handleSplashComplete = () => {
     setShowSplash(false);
-    // Navigate based on current auth state
-    if (user) {
-      console.log('🎬 Splash complete, user authenticated, checking onboarding...');
+    // For new users or when no user is authenticated, always show Welcome screen first
+    // Only auto-navigate to onboarding if user is already authenticated from a previous session
+    if (user && session) {
+      console.log('🎬 Splash complete, existing user session found, checking onboarding...');
       checkUserOnboardingStatus(user);
     } else {
-      console.log('🎬 Splash complete, no user, showing Welcome');
+      console.log('🎬 Splash complete, no existing session, showing Welcome');
       setCurrentScreen('Welcome');
       setNavigationHistory(['Welcome']);
     }
+    
+    // Enable auth navigation after a delay to prevent immediate redirects for new sign-ups
+    setTimeout(() => {
+      setAllowAuthNavigation(true);
+      console.log('🎬 Auth navigation enabled');
+    }, 2000);
   };
 
   const navigate = (screenName: string, props?: any) => {
