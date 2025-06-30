@@ -27,8 +27,10 @@ const ExploreScreen: React.FC<ExploreScreenProps> = ({ navigation, user }) => {
   const [searchResults, setSearchResults] = useState<RedditPost[]>([]);
   const [trendingStories, setTrendingStories] = useState<StoryRecommendation[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [audioLoading, setAudioLoading] = useState<string | null>(null);
+  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
   const [playerState, setPlayerState] = useState<AudioPlayerState>({
     isPlaying: false,
     isPaused: false,
@@ -43,6 +45,10 @@ const ExploreScreen: React.FC<ExploreScreenProps> = ({ navigation, user }) => {
     
     return () => {
       audioService.setOnStateChange(() => {});
+      // Clean up search timeout
+      if (searchTimeout) {
+        clearTimeout(searchTimeout);
+      }
     };
   }, []);
 
@@ -66,14 +72,44 @@ const ExploreScreen: React.FC<ExploreScreenProps> = ({ navigation, user }) => {
     }
 
     try {
-      setLoading(true);
-      const results = await apiService.searchStories(query);
+      setSearchLoading(true);
+      console.log('🔍 Searching Reddit for:', query);
+      console.log('🔍 Search loading state:', true);
+      
+      // Search directly from Reddit API
+      const results = await apiService.searchStories(query.trim(), undefined, 50); // Get more results for better variety
+      console.log('🔍 Search results received:', results.length, 'stories');
+      console.log('🔍 First result sample:', results[0] ? results[0].title : 'No results');
+      
       setSearchResults(results);
     } catch (error) {
-      console.error('Error searching stories:', error);
+      console.error('Error searching Reddit stories:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
       Alert.alert('Error', 'Failed to search stories. Please try again.');
+      setSearchResults([]);
     } finally {
-      setLoading(false);
+      setSearchLoading(false);
+      console.log('🔍 Search loading state:', false);
+    }
+  };
+
+  // Debounced search function
+  const handleSearchInputChange = (text: string) => {
+    setSearchQuery(text);
+    
+    // Clear existing timeout
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
+    }
+    
+    // Set new timeout for debounced search
+    if (text.trim()) {
+      const timeout = setTimeout(() => {
+        handleSearch(text);
+      }, 500); // 500ms delay
+      setSearchTimeout(timeout);
+    } else {
+      setSearchResults([]);
     }
   };
 
@@ -156,16 +192,27 @@ const ExploreScreen: React.FC<ExploreScreenProps> = ({ navigation, user }) => {
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Search Results</Text>
-        <Text style={styles.sectionSubtitle}>{searchResults.length} stories found</Text>
+        <Text style={styles.sectionSubtitle}>{searchResults.length} stories found for "{searchQuery}"</Text>
       </View>
-      <FlatList
-        data={searchResults.slice(0, 8)} // Show more items for horizontal scrolling  
-        renderItem={({ item }) => renderStoryCard(item, 'small')}
-        keyExtractor={(item) => item.id}
-        horizontal={true}
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.horizontalList}
-      />
+      
+      {/* Vertical list of story cards */}
+      <View style={styles.verticalList}>
+        {searchResults.map((story, index) => (
+          <View key={story.id} style={[styles.storyCardContainer, index < searchResults.length - 1 && styles.storyCardSpacing]}>
+            <EnhancedStoryCard
+              story={story}
+              onPress={() => {
+                if (navigation && navigation.navigate) {
+                  navigation.navigate('StoryDetails', { story });
+                }
+              }}
+              isPlaying={playerState.isPlaying && playerState.currentStory?.id === story.id}
+              isLoading={audioLoading === story.id}
+              size="large"
+            />
+          </View>
+        ))}
+      </View>
     </View>
   );
 
@@ -188,17 +235,24 @@ const ExploreScreen: React.FC<ExploreScreenProps> = ({ navigation, user }) => {
           <Ionicons name="search" size={20} color={theme.colors.neutral.gray[400]} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search stories..."
+            placeholder="Search Reddit stories..."
             placeholderTextColor={theme.colors.neutral.gray[400]}
             value={searchQuery}
-            onChangeText={setSearchQuery}
+            onChangeText={handleSearchInputChange}
             onSubmitEditing={() => handleSearch(searchQuery)}
             returnKeyType="search"
           />
-          {searchQuery.length > 0 && (
+          {searchLoading && (
+            <ActivityIndicator size="small" color={theme.colors.primary.orange} />
+          )}
+          {searchQuery.length > 0 && !searchLoading && (
             <TouchableOpacity onPress={() => {
               setSearchQuery('');
               setSearchResults([]);
+              if (searchTimeout) {
+                clearTimeout(searchTimeout);
+                setSearchTimeout(null);
+              }
             }}>
               <Ionicons name="close-circle" size={20} color={theme.colors.neutral.gray[400]} />
             </TouchableOpacity>
@@ -328,6 +382,12 @@ const styles = StyleSheet.create({
   },
   verticalList: {
     paddingHorizontal: theme.spacing.lg,
+  },
+  storyCardContainer: {
+    width: '100%',
+  },
+  storyCardSpacing: {
+    marginBottom: theme.spacing.md,
   },
 });
 

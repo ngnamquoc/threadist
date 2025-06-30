@@ -14,6 +14,7 @@ import SubredditSelectionScreen from './src/screens/SubredditSelectionScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import CategoryScreen from './src/screens/CategoryScreen';
 import StoryDetailsScreen from './src/screens/StoryDetailsScreen';
+import ExploreScreen from './src/screens/ExploreScreen';
 import theme from './src/styles/theme';
 import { AuthUser, authService } from './src/services/authService';
 import { interestsService } from './src/services/interestsService';
@@ -196,6 +197,8 @@ export default function App() {
         return <CategoryScreen navigation={{ navigate, goBack }} route={{ params: screenProps }} user={user} />;
       case 'StoryDetails':
         return <StoryDetailsScreen navigation={{ navigate, goBack }} route={{ params: screenProps }} user={user} />;
+      case 'Explore':
+        return <ExploreScreen navigation={{ navigate, goBack }} user={user} />;
       case 'Welcome':
       default:
         return <WelcomeScreen navigation={{ navigate }} />;
