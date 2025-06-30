@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "threadist",
+    "slug": "threadist",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/logo/logo.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/logo/logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#032330"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/logo/logo.png",
+        "backgroundColor": "#032330"
+      },
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "favicon": "./assets/logo/logo.png"
+    },
+    "scheme": "threadist"
+  }
+}
