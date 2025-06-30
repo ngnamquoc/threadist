@@ -173,7 +173,10 @@ const ExploreScreen: React.FC<ExploreScreenProps> = ({ navigation, user }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Explore</Text>
+        <View style={styles.headerContent}>
+          <Text style={styles.headerTitle}>Explore</Text>
+          <View style={styles.headerUnderline} />
+        </View>
         <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
           <Ionicons name="log-out-outline" size={20} color={theme.colors.neutral.white} />
         </TouchableOpacity>
@@ -237,16 +240,26 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.lg,
     paddingBottom: theme.spacing.md,
+  },
+  headerContent: {
+    flexDirection: 'column',
   },
   headerTitle: {
     fontSize: theme.fontSize['2xl'],
     fontWeight: theme.fontWeight.bold as any,
     color: theme.colors.neutral.white,
     fontFamily: 'CeraPro-Bold',
+    marginBottom: theme.spacing.xs,
+  },
+  headerUnderline: {
+    width: 60,
+    height: 3,
+    backgroundColor: theme.colors.primary.orange,
+    borderRadius: 2,
   },
   signOutButton: {
     width: 40,

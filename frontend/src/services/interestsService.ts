@@ -244,6 +244,46 @@ class InterestsService {
       return { hasCompleted: false, error: { message: error.message || 'Failed to check interest completion' } };
     }
   }
+
+  // Debug method to get detailed user interests information
+  async debugUserInterests(userId: string): Promise<any> {
+    try {
+      console.log('Debug: Fetching user interests for userId:', userId);
+      
+      const { data, error } = await supabase
+        .from('user_interests')
+        .select(`
+          interest_id,
+          csid,
+          user_id,
+          weight,
+          category_subreddits (
+            csid,
+            subreddit,
+            category_id,
+            interest_categories (
+              category_id,
+              slug,
+              label,
+              emoji,
+              description
+            )
+          )
+        `)
+        .eq('user_id', userId);
+
+      if (error) {
+        console.error('Debug user interests error:', error);
+        return { data: null, error };
+      }
+
+      console.log('Debug: Raw user interests data:', JSON.stringify(data, null, 2));
+      return { data, error: null };
+    } catch (error: any) {
+      console.error('Debug user interests exception:', error);
+      return { data: null, error: { message: error.message || 'Failed to debug user interests' } };
+    }
+  }
 }
 
 export const interestsService = new InterestsService();

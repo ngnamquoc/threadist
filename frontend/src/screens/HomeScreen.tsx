@@ -39,6 +39,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, user }) => {
     category: InterestCategory;
     stories: RedditPost[];
   }>>([]);
+  const [userSubredditSections, setUserSubredditSections] = useState<Array<{
+    subreddit: string;
+    stories: RedditPost[];
+  }>>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [audioLoading, setAudioLoading] = useState<string | null>(null);
@@ -59,17 +63,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, user }) => {
     };
   }, []);
 
-  const loadUserInterestSections = async (userId: string, allStories: RedditPost[], usedStories: RedditPost[] = []) => {
+  const loadUserInterestSections = async (userId: string, allStories: RedditPost[], usedStories: RedditPost[] = []): Promise<RedditPost[]> => {
     try {
       const { interestsData, error } = await interestsService.getUserInterestsWithCategories(userId);
       
       if (error || !interestsData) {
         console.error('Error loading user interests:', error);
-        return;
+        return [];
       }
 
       // Get IDs of already used stories to avoid duplicates
       const usedStoryIds = new Set(usedStories.map(story => story.id));
+      const allSelectedStories: RedditPost[] = [];
 
       // Create sections for each user interest category
       const sections = interestsData.map(({ category, subreddits }) => {
@@ -85,7 +90,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, user }) => {
         const diverseStories = createDiverseStoriesForCategory(categoryStories, allStories, subreddits, usedStoryIds);
 
         // Add the selected stories to the used set to prevent future duplicates
-        diverseStories.forEach(story => usedStoryIds.add(story.id));
+        diverseStories.forEach(story => {
+          usedStoryIds.add(story.id);
+          allSelectedStories.push(story);
+        });
 
         return {
           category,
@@ -94,8 +102,135 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, user }) => {
       }).filter(section => section.stories.length > 0); // Only include sections with stories
 
       setUserInterestSections(sections);
+      return allSelectedStories;
     } catch (error) {
       console.error('Error in loadUserInterestSections:', error);
+      return [];
+    }
+  };
+
+  const loadUserSubredditSections = async (userId: string, allStories: RedditPost[], usedStories: RedditPost[] = []) => {
+    try {
+      console.log('Loading user subreddit sections for userId:', userId);
+      
+      const { interestsData, error } = await interestsService.getUserInterestsWithCategories(userId);
+      
+      if (error || !interestsData) {
+        console.error('Error loading user interests for subreddit sections:', error);
+        return;
+      }
+
+      console.log('Interests data:', interestsData);
+
+      // Get IDs of already used stories to avoid duplicates
+      const usedStoryIds = new Set(usedStories.map(story => story.id));
+      console.log('Used story IDs count:', usedStoryIds.size);
+      console.log('Total available stories:', allStories.length);
+      
+      // Check how many nosleep stories are available vs used
+      const nosleepStories = allStories.filter(story => story.subreddit.toLowerCase() === 'nosleep');
+      const usedNosleepStories = nosleepStories.filter(story => usedStoryIds.has(story.id));
+      console.log(`Nosleep stories - Total: ${nosleepStories.length}, Used: ${usedNosleepStories.length}, Available: ${nosleepStories.length - usedNosleepStories.length}`);
+
+      // Create individual subreddit sections
+      const subredditSections: Array<{ subreddit: string; stories: RedditPost[] }> = [];
+      
+      // Get all unique subreddits from user interests
+      const allUserSubreddits = Array.from(new Set(
+        interestsData.flatMap(({ subreddits }) => subreddits)
+      ));
+      
+      console.log('User subreddits from interests:', allUserSubreddits);
+      console.log('Available story subreddits:', Array.from(new Set(allStories.map(s => s.subreddit))));
+
+      console.log('Processing all user subreddits:', allUserSubreddits);
+      
+      // Create sections for each subreddit (limit to top 6 subreddits to include more options)
+      allUserSubreddits.slice(0, 6).forEach((subreddit, index) => {
+        console.log(`Checking subreddit ${index + 1}/${allUserSubreddits.length}: ${subreddit}`);
+        
+        const subredditStories = allStories.filter(story => {
+          // More flexible matching - check if story subreddit contains or matches user interest subreddit
+          const storySubreddit = story.subreddit.toLowerCase();
+          const userSubreddit = subreddit.toLowerCase();
+          
+          const exactMatch = storySubreddit === userSubreddit;
+          const containsMatch = storySubreddit.includes(userSubreddit) || userSubreddit.includes(storySubreddit);
+          
+          const match = !usedStoryIds.has(story.id) && (exactMatch || containsMatch);
+          
+          if (match) {
+            console.log(`✓ Found matching story: ${story.title} in ${story.subreddit} (matched with ${subreddit})`);
+          }
+          return match;
+        });
+
+        console.log(`Found ${subredditStories.length} stories for r/${subreddit}`);
+
+        if (subredditStories.length >= 1) {
+          const selectedStories = subredditStories.slice(0, 6);
+          selectedStories.forEach(story => usedStoryIds.add(story.id));
+          
+          subredditSections.push({
+            subreddit,
+            stories: selectedStories
+          });
+          
+          console.log(`✓ Added section for r/${subreddit} with ${selectedStories.length} stories`);
+        } else {
+          console.log(`✗ No stories found for r/${subreddit}, skipping section`);
+        }
+      });
+
+      console.log('Final subreddit sections:', subredditSections.length);
+      
+      // Always add sections from available stories to ensure user sees subreddit content
+      console.log('Adding sections from available stories...');
+      
+      // Get all available story subreddits
+      const availableSubreddits = Array.from(new Set(allStories.map(s => s.subreddit)));
+      console.log('All available subreddits:', availableSubreddits);
+      
+      // Create sections from available subreddits (prioritize those with more stories)
+      const subredditStoryCounts = availableSubreddits.map(subreddit => ({
+        subreddit,
+        count: allStories.filter(story => story.subreddit === subreddit).length
+      })).sort((a, b) => b.count - a.count); // Sort by story count descending
+      
+      console.log('Subreddit story counts:', subredditStoryCounts);
+      
+      // Add top subreddits that aren't already in sections
+      subredditStoryCounts.slice(0, 4).forEach(({ subreddit }) => {
+        if (subredditSections.length >= 4) return; // Don't add too many
+        
+        // Check if we already have a section for this subreddit
+        const alreadyHasSection = subredditSections.some(section => 
+          section.subreddit.toLowerCase() === subreddit.toLowerCase()
+        );
+        
+        if (!alreadyHasSection) {
+          const availableStories = allStories.filter(story => 
+            !usedStoryIds.has(story.id) && 
+            story.subreddit.toLowerCase() === subreddit.toLowerCase()
+          );
+          
+          if (availableStories.length >= 1) { // At least 1 story for a section
+            const selectedStories = availableStories.slice(0, 6);
+            selectedStories.forEach(story => usedStoryIds.add(story.id));
+            
+            subredditSections.push({
+              subreddit: subreddit,
+              stories: selectedStories
+            });
+            
+            console.log(`✓ Added section for r/${subreddit} with ${selectedStories.length} stories`);
+          }
+        }
+      });
+      
+      setUserSubredditSections(subredditSections);
+    } catch (error) {
+      console.error('Error in loadUserSubredditSections:', error);
     }
   };
 
@@ -168,6 +303,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, user }) => {
       setHotThreadStories(hotStories);
 
       if (user?.id) {
+        console.log('Loading data for authenticated user:', user.id);
+        
+        // Debug: Check user interests first
+        const debugResult = await interestsService.debugUserInterests(user.id);
+        console.log('Debug user interests result:', debugResult);
+
         // Load personalized recommendations
         const recs = await apiService.getRecommendedStories(user.id, 20); // Get more for diversity
         const recStories = recs.map(rec => rec.post);
@@ -182,12 +323,13 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, user }) => {
         const diverseFollowedStories = createDiverseFollowedStories(combinedStories);
         setFollowedStories(diverseFollowedStories);
 
-        // Load personalized interest-based sections
-        await loadUserInterestSections(user.id, combinedStories, [
-          ...hotStories,
-          ...diverseFollowedStories,
-          ...recStories
-        ]);
+        // Load personalized interest-based sections first
+        const interestUsedStories = [...hotStories, ...diverseFollowedStories, ...recStories];
+        const interestSectionStories = await loadUserInterestSections(user.id, combinedStories, interestUsedStories);
+
+        // Load individual subreddit sections (only avoid core sections, allow some overlap with interest sections)
+        const coreUsedStories = [...hotStories, ...diverseFollowedStories]; // Don't include rec stories or interest sections
+        await loadUserSubredditSections(user.id, combinedStories, coreUsedStories);
       } else {
         // For non-authenticated users, show trending content with diversity
         setRecommendedStories(hotStories.slice(3, 8));
@@ -197,6 +339,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, user }) => {
         
         // Clear user interest sections for non-authenticated users
         setUserInterestSections([]);
+        setUserSubredditSections([]);
       }
     } catch (error) {
       console.error('Error loading stories:', error);
@@ -210,6 +353,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, user }) => {
     setRefreshing(true);
     await loadInitialData();
     setRefreshing(false);
+  };
+
+  // Generate a truly unique key for story cards
+  const generateUniqueKey = (sectionKey: string, story: RedditPost, index: number): string => {
+    // Combine multiple identifiers to ensure uniqueness across all sections
+    const storyTitleSnippet = story.title?.replace(/[^a-zA-Z0-9]/g, '').substring(0, 8) || 'notitle';
+    const subredditSnippet = story.subreddit?.substring(0, 6) || 'nosub';
+    
+    return `${sectionKey}-${story.id}-${storyTitleSnippet}-${subredditSnippet}-${index}`;
   };
 
   const handleStoryPress = async (story: RedditPost) => {
@@ -269,6 +421,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, user }) => {
         return 'Trending stories from topics you follow';
       } else if (sectionTitle === 'Recommended for you') {
         return 'We think you\'ll like these';
+      } else if (sectionTitle.startsWith('r/')) {
+        return `Latest stories from ${sectionTitle}`;
       } else if (sectionTitle.includes('🔥')) {
         return 'Stories & humor from your interests';
       } else if (sectionTitle.includes('👻')) {
@@ -295,7 +449,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, user }) => {
         <FlatList
           data={stories.slice(0, 6)} // Show more items for horizontal scrolling
           renderItem={({ item, index }) => renderStoryCard(item, 'small', sectionKey)} // Pass section key
-          keyExtractor={(item, index) => `${sectionKey}-${item.id}-${index}`} // Create unique key with index
+          keyExtractor={(item, index) => generateUniqueKey(sectionKey, item, index)} // Use robust unique key generation
           horizontal={true} // Make all sections horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.horizontalList}
@@ -313,7 +467,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, user }) => {
     <>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>For You</Text>
+        <View style={styles.headerContent}>
+          <Text style={styles.headerTitle}>For You</Text>
+          <View style={styles.headerUnderline} />
+        </View>
         <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
           <Ionicons name="log-out-outline" size={20} color={theme.colors.neutral.white} />
         </TouchableOpacity>
@@ -335,6 +492,11 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, user }) => {
               category: section.category,
               stories: section.stories
             })),
+            ...userSubredditSections.map((section, index) => ({
+              type: `subreddit-${section.subreddit}-${index}`, // Use subreddit name for uniqueness
+              subreddit: section.subreddit,
+              stories: section.stories
+            })),
             { type: 'recommended', stories: recommendedStories }
           ]}
           renderItem={({ item }: { item: any }) => {
@@ -354,10 +516,18 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, user }) => {
                     item.type
                   );
                 }
+                // Handle user subreddit sections
+                if (item.type.startsWith('subreddit-') && item.subreddit) {
+                  return renderSection(
+                    `r/${item.subreddit}`, 
+                    item.stories,
+                    item.type
+                  );
+                }
                 return null;
             }
           }}
-          keyExtractor={(item) => item.type}
+          keyExtractor={(item, index) => `section-${item.type}-${index}`}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -417,16 +587,26 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.lg,
     paddingBottom: theme.spacing.md,
+  },
+  headerContent: {
+    flexDirection: 'column',
   },
   headerTitle: {
     fontSize: theme.fontSize['2xl'],
     fontWeight: theme.fontWeight.bold as any,
     color: theme.colors.neutral.white,
     fontFamily: 'CeraPro-Bold',
+    marginBottom: theme.spacing.xs,
+  },
+  headerUnderline: {
+    width: 60,
+    height: 3,
+    backgroundColor: theme.colors.primary.orange,
+    borderRadius: 2,
   },
   signOutButton: {
     width: 40,
