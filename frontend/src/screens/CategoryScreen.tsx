@@ -246,7 +246,7 @@ const CategoryScreen: React.FC<CategoryScreenProps> = ({ navigation, route, user
     <View style={styles.storyContainer}>
       <EnhancedStoryCard
         story={story}
-        onPress={() => {/* Handle story press */}}
+        onPress={() => navigation.navigate('StoryDetails', { story })}
         isPlaying={playerState.isPlaying}
         isLoading={audioLoading === story.id}
         size="large"

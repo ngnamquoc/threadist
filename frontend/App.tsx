@@ -13,6 +13,7 @@ import InterestSelectionScreen from './src/screens/InterestSelectionScreen';
 import SubredditSelectionScreen from './src/screens/SubredditSelectionScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import CategoryScreen from './src/screens/CategoryScreen';
+import StoryDetailsScreen from './src/screens/StoryDetailsScreen';
 import theme from './src/styles/theme';
 import { AuthUser, authService } from './src/services/authService';
 import { interestsService } from './src/services/interestsService';
@@ -21,6 +22,7 @@ export default function App() {
   const [showSplash, setShowSplash] = useState(true);
   const [currentScreen, setCurrentScreen] = useState('Welcome');
   const [screenProps, setScreenProps] = useState<any>({});
+  const [navigationHistory, setNavigationHistory] = useState<string[]>(['Welcome']);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -87,8 +89,20 @@ export default function App() {
   };
 
   const navigate = (screenName: string, props?: any) => {
+    setNavigationHistory(prev => [...prev, screenName]);
     setCurrentScreen(screenName);
     setScreenProps(props || {});
+  };
+
+  const goBack = () => {
+    setNavigationHistory(prev => {
+      const newHistory = [...prev];
+      newHistory.pop(); // Remove current screen
+      const previousScreen = newHistory[newHistory.length - 1] || 'Home';
+      setCurrentScreen(previousScreen);
+      setScreenProps({});
+      return newHistory.length > 0 ? newHistory : ['Home'];
+    });
   };
 
   // Show splash screen
@@ -118,7 +132,9 @@ export default function App() {
       case 'Home':
         return <HomeScreen navigation={{ navigate }} user={user} />;
       case 'CategoryScreen':
-        return <CategoryScreen navigation={{ navigate, goBack: () => navigate('Home') }} route={{ params: screenProps }} user={user} />;
+        return <CategoryScreen navigation={{ navigate, goBack }} route={{ params: screenProps }} user={user} />;
+      case 'StoryDetails':
+        return <StoryDetailsScreen navigation={{ navigate, goBack }} route={{ params: screenProps }} user={user} />;
       case 'Welcome':
       default:
         return <WelcomeScreen navigation={{ navigate }} />;

@@ -157,11 +157,31 @@ class AudioService {
   }
 
   public async seekTo(position: number): Promise<void> {
+    if (!this.sound) {
+      console.log('No sound loaded, cannot seek');
+      return;
+    }
+
+    try {
+      // Check if the sound is loaded before seeking
+      const status = await this.sound.getStatusAsync();
+      if (status.isLoaded) {
+        await this.sound.setPositionAsync(position);
+        console.log('Seek successful to position:', position);
+      } else {
+        console.log('Sound not loaded, cannot seek');
+      }
+    } catch (error) {
+      console.error('Error seeking audio:', error);
+    }
+  }
+
+  public async setPlaybackSpeed(speed: number): Promise<void> {
     if (this.sound) {
       try {
-        await this.sound.setPositionAsync(position);
+        await this.sound.setRateAsync(speed, true);
       } catch (error) {
-        console.error('Error seeking audio:', error);
+        console.error('Error setting playback speed:', error);
       }
     }
   }

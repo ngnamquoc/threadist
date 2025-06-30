@@ -365,29 +365,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, user }) => {
   };
 
   const handleStoryPress = async (story: RedditPost) => {
-    try {
-      setAudioLoading(story.id);
-      
-      // Load and play the story using streaming
-      const success = await audioService.loadAudioStream(
-        story.content, 
-        "JBFqnCBsd6RMkjVDRZzb", // Default storytelling voice
-        story
-      );
-      
-      if (success) {
-        await audioService.play();
-        // Success - audio will start playing automatically
-      } else {
-        console.error('Failed to generate audio for story:', story.id);
-        // Could add a subtle toast notification here if needed
-      }
-    } catch (error) {
-      console.error('Error playing story:', error);
-      // Could add a subtle toast notification here if needed
-    } finally {
-      setAudioLoading(null);
-    }
+    // Navigate to story details instead of auto-playing
+    navigation.navigate('StoryDetails', { story });
   };
 
   const handleSignOut = async () => {
