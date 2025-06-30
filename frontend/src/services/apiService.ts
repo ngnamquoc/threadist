@@ -67,9 +67,9 @@ class ApiService {
   private baseUrl: string;
 
   constructor() {
-    // In development, this would point to your local backend
-    // In production, this would be your deployed backend URL
-    this.baseUrl = 'http://localhost:8000';
+    // Use environment variable for backend URL, fallback to localhost
+    this.baseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
+    console.log('ApiService initialized with baseUrl:', this.baseUrl);
   }
 
   private async makeRequest<T>(
@@ -77,21 +77,36 @@ class ApiService {
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
+    console.log('Making API request to:', url);
     
-    const response = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-      ...options,
-    });
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+        ...options,
+      });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+      console.log('API response status:', response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('API response data length:', Array.isArray(data) ? data.length : 'Not an array');
+      return data;
+    } catch (error: any) {
+      console.error('API request failed:', error);
+      
+      // Check if it's a network error (backend not running)
+      if (error.message === 'Network request failed' || error.code === 'NETWORK_ERROR') {
+        throw new Error(`Backend server is not available at ${this.baseUrl}. Please make sure the backend server is running.`);
+      }
+      throw error;
     }
-
-    return response.json();
   }
 
   // Reddit API endpoints
