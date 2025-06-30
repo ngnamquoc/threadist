@@ -297,17 +297,9 @@ export default function StoryDetailsScreen({ navigation, route, user }: StoryDet
             onPress={handlePlayPress}
             disabled={audioLoading}
           >
-            {audioLoading ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <Ionicons 
-                name={isCurrentlyPlaying ? "headset" : "play"} 
-                size={24} 
-                color="#FFFFFF" 
-              />
-            )}
+            {playButtonContent.icon}
             <Text style={styles.playButtonText}>
-              {audioLoading ? 'Generating...' : isCurrentlyPlaying ? 'Show Player' : 'Play Audio'}
+              {playButtonContent.text}
             </Text>
           </TouchableOpacity>
         </View>
