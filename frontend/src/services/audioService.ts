@@ -85,6 +85,43 @@ class AudioService {
     }
   }
 
+  public async loadAudioStream(text: string, voiceId?: string, story?: any): Promise<boolean> {
+    try {
+      // Unload previous audio
+      await this.unloadAudio();
+
+      // Stream audio directly from text
+      const audioDataUrl = await apiService.streamAudio(text, voiceId);
+      
+      // Use the data URL directly (compatible with React Native)
+      const audioUrl = audioDataUrl;
+
+      // Load the audio
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: audioUrl },
+        { shouldPlay: false },
+        this.onPlaybackStatusUpdate.bind(this)
+      );
+
+      this.sound = sound;
+      this.currentAudioUrl = audioUrl;
+
+      this.notifyStateChange({
+        isLoaded: true,
+        currentStory: story,
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Error loading audio stream:', error);
+      this.notifyStateChange({
+        isLoaded: false,
+        currentStory: undefined,
+      });
+      return false;
+    }
+  }
+
   public async play(): Promise<void> {
     if (this.sound && this.currentAudioUrl) {
       try {

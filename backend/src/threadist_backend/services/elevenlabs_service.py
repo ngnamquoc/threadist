@@ -1,45 +1,16 @@
 import os
-import tempfile
-import aiofiles
-from elevenlabs import generate, save, set_api_key
-from elevenlabs.api import History
+import uuid
+from elevenlabs import VoiceSettings
+from elevenlabs.client import ElevenLabs
 from ..config import Config
 
 class ElevenLabsService:
     def __init__(self):
         self.api_key = Config.ELEVENLABS_API_KEY
-        set_api_key(self.api_key)
+        self.client = ElevenLabs(api_key=self.api_key)
         # Default voice ID for a good storytelling voice
         self.default_voice_id = "JBFqnCBsd6RMkjVDRZzb"  # This is a good storytelling voice
         
-    async def text_to_speech(self, text: str, voice_id: str = None) -> str:
-        """
-        Convert text to speech and return the file path
-        """
-        if not voice_id:
-            voice_id = self.default_voice_id
-            
-        try:
-            # Generate audio
-            audio = generate(
-                text=text,
-                voice=voice_id,
-                model="eleven_multilingual_v2"
-            )
-            
-            # Create temporary file
-            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
-            temp_path = temp_file.name
-            temp_file.close()
-            
-            # Save audio to file
-            save(audio, temp_path)
-            
-            return temp_path
-            
-        except Exception as e:
-            raise Exception(f"Error generating speech: {str(e)}")
-    
     async def text_to_speech_stream(self, text: str, voice_id: str = None) -> bytes:
         """
         Convert text to speech and return audio bytes for streaming
@@ -48,29 +19,76 @@ class ElevenLabsService:
             voice_id = self.default_voice_id
             
         try:
-            # Generate audio
-            audio = generate(
+            # Generate audio using the new client API with streaming
+            response = self.client.text_to_speech.convert(
+                voice_id=voice_id,
+                output_format="mp3_22050_32",
                 text=text,
-                voice=voice_id,
-                model="eleven_multilingual_v2"
+                model_id="eleven_turbo_v2_5",  # use the turbo model for low latency
+                voice_settings=VoiceSettings(
+                    stability=0.0,
+                    similarity_boost=1.0,
+                    style=0.0,
+                    use_speaker_boost=True,
+                    speed=1.0,
+                ),
             )
             
-            # Convert to bytes
-            audio_bytes = audio.read()
+            # Convert response to bytes
+            audio_bytes = b""
+            for chunk in response:
+                if chunk:
+                    audio_bytes += chunk
             
             return audio_bytes
             
         except Exception as e:
             raise Exception(f"Error generating speech stream: {str(e)}")
     
+    async def text_to_speech_file(self, text: str, voice_id: str = None) -> str:
+        """
+        Convert text to speech and save to file (for backward compatibility)
+        """
+        if not voice_id:
+            voice_id = self.default_voice_id
+            
+        try:
+            # Generate audio using the new client API
+            response = self.client.text_to_speech.convert(
+                voice_id=voice_id,
+                output_format="mp3_22050_32",
+                text=text,
+                model_id="eleven_turbo_v2_5",  # use the turbo model for low latency
+                voice_settings=VoiceSettings(
+                    stability=0.0,
+                    similarity_boost=1.0,
+                    style=0.0,
+                    use_speaker_boost=True,
+                    speed=1.0,
+                ),
+            )
+
+            # Generate a unique file name for the output MP3 file
+            save_file_path = f"{uuid.uuid4()}.mp3"
+
+            # Writing the audio to a file
+            with open(save_file_path, "wb") as f:
+                for chunk in response:
+                    if chunk:
+                        f.write(chunk)
+
+            return save_file_path
+            
+        except Exception as e:
+            raise Exception(f"Error generating speech: {str(e)}")
+    
     async def get_available_voices(self):
         """
         Get list of available voices
         """
         try:
-            from elevenlabs import voices
-            available_voices = voices()
-            return available_voices
+            voices = self.client.voices.get_all()
+            return voices
         except Exception as e:
             raise Exception(f"Error getting voices: {str(e)}")
     

@@ -8,7 +8,7 @@ import tempfile
 from .config import Config
 from .models import (
     RedditPost, SubredditInfo, StoryRecommendation, 
-    AudioStreamResponse, SearchRequest, UserProfile
+    AudioStreamResponse, AudioStreamRequest, SearchRequest, UserProfile
 )
 from .services.reddit_service import RedditService
 from .services.elevenlabs_service import ElevenLabsService
@@ -129,14 +129,39 @@ async def get_trending_stories(
         raise HTTPException(status_code=500, detail=f"Error getting trending stories: {str(e)}")
 
 # ElevenLabs TTS Routes
+@app.post("/api/tts/stream")
+async def stream_audio(request: AudioStreamRequest):
+    """Stream audio directly from text using ElevenLabs"""
+    try:
+        if len(request.text) > 5000:  # Limit text length
+            raise HTTPException(status_code=400, detail="Text too long (max 5000 characters)")
+        
+        # Generate audio bytes
+        audio_bytes = await elevenlabs_service.text_to_speech_stream(
+            request.text, 
+            request.voice_id
+        )
+        
+        # Return streaming response
+        return StreamingResponse(
+            iter([audio_bytes]),
+            media_type="audio/mpeg",
+            headers={
+                "Content-Disposition": "attachment; filename=audio.mp3",
+                "Content-Length": str(len(audio_bytes))
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating audio stream: {str(e)}")
+
 @app.post("/api/tts/generate", response_model=AudioStreamResponse)
 async def generate_audio(text: str = Query(..., description="Text to convert to speech")):
-    """Generate audio from text using ElevenLabs"""
+    """Generate audio from text using ElevenLabs (file-based, for backward compatibility)"""
     try:
         if len(text) > 5000:  # Limit text length
             raise HTTPException(status_code=400, detail="Text too long (max 5000 characters)")
         
-        audio_path = await elevenlabs_service.text_to_speech(text)
+        audio_path = await elevenlabs_service.text_to_speech_file(text)
         
         return AudioStreamResponse(
             audio_url=f"/api/tts/audio/{os.path.basename(audio_path)}",

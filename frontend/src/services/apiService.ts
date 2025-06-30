@@ -165,6 +165,35 @@ class ApiService {
     });
   }
 
+  async streamAudio(text: string, voiceId?: string): Promise<string> {
+    const response = await fetch(`${this.baseUrl}/api/tts/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        text,
+        voice_id: voiceId,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+    }
+
+    // Convert blob to base64 data URL for React Native compatibility
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        resolve(reader.result as string);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
   getAudioUrl(filename: string): string {
     return `${this.baseUrl}/api/tts/audio/${filename}`;
   }

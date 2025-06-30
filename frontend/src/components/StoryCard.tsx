@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { RedditPost } from '../services/apiService';
@@ -14,6 +15,7 @@ interface StoryCardProps {
   story: RedditPost;
   onPress: (story: RedditPost) => void;
   isPlaying?: boolean;
+  isLoading?: boolean;
   showPlayButton?: boolean;
 }
 
@@ -23,6 +25,7 @@ const StoryCard: React.FC<StoryCardProps> = ({
   story,
   onPress,
   isPlaying = false,
+  isLoading = false,
   showPlayButton = true,
 }) => {
   const formatTime = (timestamp: number) => {
@@ -79,12 +82,17 @@ const StoryCard: React.FC<StoryCardProps> = ({
             <TouchableOpacity
               style={[styles.playButton, isPlaying && styles.playingButton]}
               onPress={() => onPress(story)}
+              disabled={isLoading}
             >
-              <Ionicons
-                name={isPlaying ? 'pause' : 'play'}
-                size={16}
-                color={theme.colors.neutral.white}
-              />
+              {isLoading ? (
+                <ActivityIndicator size="small" color={theme.colors.neutral.white} />
+              ) : (
+                <Ionicons
+                  name={isPlaying ? 'pause' : 'play'}
+                  size={16}
+                  color={theme.colors.neutral.white}
+                />
+              )}
             </TouchableOpacity>
           )}
         </View>

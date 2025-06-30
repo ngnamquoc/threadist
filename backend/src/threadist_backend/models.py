@@ -47,6 +47,12 @@ class AudioStreamResponse(BaseModel):
     duration: Optional[float] = None
     text_length: int
 
+class AudioStreamRequest(BaseModel):
+    text: str
+    voice_id: Optional[str] = None
+    model_id: Optional[str] = "eleven_turbo_v2_5"
+    output_format: Optional[str] = "mp3_22050_32"
+
 class SearchRequest(BaseModel):
     query: str
     subreddit: Optional[str] = None

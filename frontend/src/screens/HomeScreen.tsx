@@ -35,6 +35,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, user }) => {
   const [searchResults, setSearchResults] = useState<RedditPost[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [activeTab, setActiveTab] = useState<'recommended' | 'trending' | 'search'>('recommended');
+  const [audioLoading, setAudioLoading] = useState<string | null>(null); // Track which story is loading
   const [playerState, setPlayerState] = useState<AudioPlayerState>({
     isPlaying: false,
     isPaused: false,
@@ -100,20 +101,27 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, user }) => {
 
   const handleStoryPress = async (story: RedditPost) => {
     try {
-      // Show loading indicator
-      Alert.alert('Loading', 'Generating audio for this story...');
+      setAudioLoading(story.id);
       
-      // Load and play the story
-      const success = await audioService.loadAudio(story.content, story);
+      // Load and play the story using streaming
+      const success = await audioService.loadAudioStream(
+        story.content, 
+        "JBFqnCBsd6RMkjVDRZzb", // Default storytelling voice
+        story
+      );
+      
       if (success) {
         await audioService.play();
-        Alert.alert('Success', 'Audio is now playing!');
+        // Success - audio will start playing automatically
       } else {
-        Alert.alert('Error', 'Failed to generate audio for this story');
+        console.error('Failed to generate audio for story:', story.id);
+        // Could add a subtle toast notification here if needed
       }
     } catch (error) {
       console.error('Error playing story:', error);
-      Alert.alert('Error', 'Failed to play story');
+      // Could add a subtle toast notification here if needed
+    } finally {
+      setAudioLoading(null);
     }
   };
 
@@ -134,6 +142,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, user }) => {
       story={item}
       onPress={handleStoryPress}
       isPlaying={playerState.isPlaying && playerState.currentStory?.id === item.id}
+      isLoading={audioLoading === item.id}
     />
   );
 
@@ -142,6 +151,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, user }) => {
       story={item.post}
       onPress={handleStoryPress}
       isPlaying={playerState.isPlaying && playerState.currentStory?.id === item.post.id}
+      isLoading={audioLoading === item.post.id}
     />
   );
 

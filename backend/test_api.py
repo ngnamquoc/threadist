@@ -95,6 +95,29 @@ def test_tts_generate():
         print(f"❌ TTS generation error: {e}")
         return False
 
+def test_tts_stream():
+    """Test TTS streaming endpoint"""
+    print("\n🔍 Testing TTS streaming...")
+    try:
+        test_text = "This is a test story for audio streaming."
+        response = requests.post(f"{BASE_URL}/api/tts/stream", json={
+            "text": test_text
+        })
+        if response.status_code == 200:
+            audio_data = response.content
+            print("✅ TTS streaming passed")
+            print(f"   Audio data size: {len(audio_data)} bytes")
+            print(f"   Content-Type: {response.headers.get('content-type')}")
+            print(f"   Content-Length: {response.headers.get('content-length')}")
+            return True
+        else:
+            print(f"❌ TTS streaming failed: {response.status_code}")
+            print(f"   Error: {response.text}")
+            return False
+    except Exception as e:
+        print(f"❌ TTS streaming error: {e}")
+        return False
+
 def main():
     """Run all tests"""
     print("🧪 Threadist Backend API Test")
@@ -105,6 +128,7 @@ def main():
         test_reddit_search,
         test_trending_stories,
         test_tts_generate,
+        test_tts_stream,
     ]
     
     passed = 0
