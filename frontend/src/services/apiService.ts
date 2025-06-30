@@ -130,11 +130,13 @@ class ApiService {
   async getSubredditStories(
     subreddit: string,
     limit: number = 25,
-    sort: 'hot' | 'new' | 'top' | 'rising' = 'hot'
+    sort: 'hot' | 'new' | 'top' | 'rising' = 'hot',
+    page: number = 1
   ): Promise<RedditPost[]> {
     const params = new URLSearchParams({
       limit: limit.toString(),
       sort,
+      page: page.toString(),
     });
 
     return this.makeRequest<RedditPost[]>(`/api/reddit/subreddit/${subreddit}/stories?${params}`);
@@ -154,21 +156,79 @@ class ApiService {
   }
 
   // Recommendation endpoints
-  async getRecommendedStories(userId: string, limit: number = 10): Promise<StoryRecommendation[]> {
+  async getRecommendedStories(userId: string, limit: number = 10, page: number = 1): Promise<StoryRecommendation[]> {
     const params = new URLSearchParams({
       user_id: userId,
       limit: limit.toString(),
+      page: page.toString(),
     });
 
     return this.makeRequest<StoryRecommendation[]>(`/api/recommendations/stories?${params}`);
   }
 
-  async getTrendingStories(limit: number = 10): Promise<StoryRecommendation[]> {
+  async getTrendingStories(limit: number = 10, page: number = 1): Promise<StoryRecommendation[]> {
     const params = new URLSearchParams({
       limit: limit.toString(),
+      page: page.toString(),
     });
 
     return this.makeRequest<StoryRecommendation[]>(`/api/recommendations/trending?${params}`);
+  }
+
+  // Category and Subreddit story endpoints
+  async getHotStories(limit: number = 10, page: number = 1): Promise<StoryRecommendation[]> {
+    // Use trending stories as hot stories since /api/reddit/hot doesn't exist
+    console.log('Using trending stories as fallback for hot stories');
+    return this.getTrendingStories(limit, page);
+  }
+
+  async getCategoryStories(
+    categoryId: string, 
+    userId?: string, 
+    limit: number = 10, 
+    page: number = 1
+  ): Promise<StoryRecommendation[]> {
+    // For now, fallback to recommended stories for the user
+    // TODO: Implement proper category-based recommendations on backend
+    if (userId) {
+      console.log(`Using recommended stories as fallback for category ${categoryId}`);
+      return this.getRecommendedStories(userId, limit, page);
+    } else {
+      console.log(`Using trending stories as fallback for category ${categoryId}`);
+      return this.getTrendingStories(limit, page);
+    }
+  }
+
+  async getFollowedSubredditsStories(
+    userId: string, 
+    limit: number = 10, 
+    page: number = 1
+  ): Promise<StoryRecommendation[]> {
+    // For now, fallback to recommended stories
+    // TODO: Implement proper followed subreddits endpoint on backend
+    console.log(`Using recommended stories as fallback for followed subreddits`);
+    return this.getRecommendedStories(userId, limit, page);
+  }
+
+  async getSubredditRecommendations(
+    subreddit: string, 
+    userId?: string,
+    limit: number = 10, 
+    page: number = 1
+  ): Promise<StoryRecommendation[]> {
+    // Convert direct subreddit stories to recommendation format
+    try {
+      console.log(`Getting subreddit stories for ${subreddit} and converting to recommendations`);
+      const posts = await this.getSubredditStories(subreddit, limit, 'hot', page);
+      return posts.map(post => ({
+        post,
+        score: post.score,
+        reason: `Popular story from r/${subreddit}`
+      }));
+    } catch (error) {
+      console.error(`Error getting subreddit recommendations for ${subreddit}:`, error);
+      throw error;
+    }
   }
 
   // TTS endpoints
@@ -253,4 +313,4 @@ class ApiService {
   }
 }
 
-export const apiService = new ApiService(); 
+export const apiService = new ApiService();

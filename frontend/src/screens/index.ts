@@ -8,3 +8,4 @@ export { default as InterestSelectionScreen } from './InterestSelectionScreen';
 export { default as SubredditSelectionScreen } from './SubredditSelectionScreen';
 export { default as HomeScreen } from './HomeScreen';
 export { default as ExploreScreen } from './ExploreScreen';
+export { default as CategoryScreen } from './CategoryScreen';

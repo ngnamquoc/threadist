@@ -12,6 +12,7 @@ import InterestsScreen from './src/screens/InterestsScreen';
 import InterestSelectionScreen from './src/screens/InterestSelectionScreen';
 import SubredditSelectionScreen from './src/screens/SubredditSelectionScreen';
 import HomeScreen from './src/screens/HomeScreen';
+import CategoryScreen from './src/screens/CategoryScreen';
 import theme from './src/styles/theme';
 import { AuthUser, authService } from './src/services/authService';
 import { interestsService } from './src/services/interestsService';
@@ -116,6 +117,8 @@ export default function App() {
         return <SubredditSelectionScreen navigation={{ navigate }} user={user} selectedCategories={screenProps.selectedCategories} />;
       case 'Home':
         return <HomeScreen navigation={{ navigate }} user={user} />;
+      case 'CategoryScreen':
+        return <CategoryScreen navigation={{ navigate, goBack: () => navigate('Home') }} route={{ params: screenProps }} user={user} />;
       case 'Welcome':
       default:
         return <WelcomeScreen navigation={{ navigate }} />;

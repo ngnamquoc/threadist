@@ -412,7 +412,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, user }) => {
     />
   );
 
-  const renderSection = (title: string, stories: RedditPost[], sectionKey: string, cardSize: 'small' | 'large' = 'large') => {
+  const renderSection = (title: string, stories: RedditPost[], sectionKey: string, cardSize: 'small' | 'large' = 'large', sectionType?: 'hot' | 'followed' | 'recommended' | 'interest' | 'subreddit', categoryData?: any) => {
     // Generate subtitle based on section title
     const getSubtitle = (sectionTitle: string) => {
       if (sectionTitle === 'Hot Thread of the Day') {
@@ -440,10 +440,55 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, user }) => {
       }
     };
 
+    const handleMorePress = () => {
+      if (!navigation) {
+        console.log('Navigation object not available');
+        return;
+      }
+      
+      let type: 'hot' | 'recommended' | 'followed' | 'interest' | 'subreddit' = 'hot';
+      let category;
+      let subreddit;
+      
+      if (sectionType === 'hot') {
+        type = 'hot';
+      } else if (sectionType === 'followed') {
+        type = 'followed';
+      } else if (sectionType === 'recommended') {
+        type = 'recommended';
+      } else if (sectionType === 'interest' && categoryData) {
+        type = 'interest';
+        category = categoryData;
+      } else if (sectionType === 'subreddit' && categoryData) {
+        type = 'subreddit';
+        subreddit = categoryData;
+      }
+      
+      const params = {
+        type,
+        title,
+        subtitle: getSubtitle(title),
+        category,
+        subreddit,
+        userId: user?.id,
+      };
+      
+      console.log('Navigating to CategoryScreen with params:', params);
+      navigation.navigate('CategoryScreen', params);
+    };
+
     return (
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{title}</Text>
+          <View style={styles.sectionTitleContainer}>
+            <Text style={styles.sectionTitle}>{title}</Text>
+            <TouchableOpacity 
+              style={styles.moreButton}
+              onPress={handleMorePress}
+            >
+              <Text style={styles.moreButtonText}>More</Text>
+            </TouchableOpacity>
+          </View>
           <Text style={styles.sectionSubtitle}>{getSubtitle(title)}</Text>
         </View>
         <FlatList
@@ -502,18 +547,21 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, user }) => {
           renderItem={({ item }: { item: any }) => {
             switch (item.type) {
               case 'hot':
-                return renderSection('Hot Thread of the Day', item.stories, 'hot');
+                return renderSection('Hot Thread of the Day', item.stories, 'hot', 'large', 'hot');
               case 'followed':
-                return renderSection('Followed Subreddits', item.stories, 'followed');
+                return renderSection('Followed Subreddits', item.stories, 'followed', 'large', 'followed');
               case 'recommended':
-                return renderSection('Recommended for you', item.stories, 'recommended');
+                return renderSection('Recommended for you', item.stories, 'recommended', 'large', 'recommended');
               default:
                 // Handle user interest sections
                 if (item.type.startsWith('interest-') && item.category) {
                   return renderSection(
                     `${item.category.emoji} ${item.category.label}`, 
                     item.stories,
-                    item.type
+                    item.type,
+                    'large',
+                    'interest',
+                    item.category
                   );
                 }
                 // Handle user subreddit sections
@@ -521,7 +569,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, user }) => {
                   return renderSection(
                     `r/${item.subreddit}`, 
                     item.stories,
-                    item.type
+                    item.type,
+                    'large',
+                    'subreddit',
+                    item.subreddit
                   );
                 }
                 return null;
@@ -639,12 +690,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     marginBottom: theme.spacing.md,
   },
+  sectionTitleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: theme.spacing.xs,
+  },
   sectionTitle: {
     fontSize: theme.fontSize.xl,
     fontWeight: theme.fontWeight.bold as any,
     color: theme.colors.neutral.white,
     fontFamily: 'CeraPro-Bold',
-    marginBottom: theme.spacing.xs,
+    flex: 1,
+  },
+  moreButton: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  moreButtonText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.primary.orange,
+    fontWeight: '600',
+    fontFamily: 'CeraPro-Medium',
   },
   sectionSubtitle: {
     fontSize: theme.fontSize.sm,
