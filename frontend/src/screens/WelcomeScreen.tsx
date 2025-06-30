@@ -23,7 +23,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
         {/* Logo */}
         <View style={styles.logoContainer}>
           <Image
-            source={require('../../assets/logo/reddit-logo.png')}
+            source={require('../../assets/logo/logo.png')}
             style={styles.logo}
             resizeMode="contain"
           />
@@ -59,6 +59,15 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
             <Text style={styles.secondaryBtnText}>Login</Text>
           </TouchableOpacity>
         </View>
+      </View>
+
+      {/* Bolt Logo at Bottom */}
+      <View style={styles.boltLogoContainer}>
+        <Image
+          source={require('../../assets/logo/bolt_logo.png')}
+          style={styles.boltLogo}
+          resizeMode="contain"
+        />
       </View>
     </SafeAreaView>
   );
@@ -142,6 +151,20 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.base,
     fontWeight: theme.fontWeight.semibold as any,
     fontFamily: 'CeraPro-Medium',
+  },
+  
+  boltLogoContainer: {
+    position: 'absolute',
+    bottom: 40,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  boltLogo: {
+    width: 32,
+    height: 32,
+    opacity: 0.8,
   },
 });
 

@@ -11,6 +11,7 @@ interface SplashScreenProps {
 export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationComplete }) => {
   const [logoScale] = useState(new Animated.Value(0.5));
   const [logoOpacity] = useState(new Animated.Value(0));
+  const [boltOpacity] = useState(new Animated.Value(0));
 
   useEffect(() => {
     // Start the logo animation
@@ -30,7 +31,13 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationComplete 
         }),
       ]),
       // Hold for a moment
-      Animated.delay(1500),
+      Animated.delay(1000),
+      // Fade in Bolt logo
+      Animated.timing(boltOpacity, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
       // Slight bounce effect
       Animated.sequence([
         Animated.timing(logoScale, {
@@ -72,6 +79,22 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationComplete 
           />
         </View>
       </Animated.View>
+
+      {/* Bolt Logo at Bottom */}
+      <Animated.View
+        style={[
+          styles.boltLogoContainer,
+          {
+            opacity: boltOpacity,
+          },
+        ]}
+      >
+        <Image 
+          source={require('../../assets/logo/bolt_logo.png')}
+          style={styles.boltLogo}
+          resizeMode="contain"
+        />
+      </Animated.View>
     </View>
   );
 };
@@ -96,6 +119,17 @@ const styles = StyleSheet.create({
   logoImage: {
     width: 100,
     height: 100,
+  },
+  boltLogoContainer: {
+    position: 'absolute',
+    bottom: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  boltLogo: {
+    width: 32,
+    height: 32,
+    opacity: 0.8,
   },
 });
 

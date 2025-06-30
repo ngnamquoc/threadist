@@ -11,6 +11,7 @@ import {
   TextInput,
   ActivityIndicator,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -492,7 +493,14 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, user }) => {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>For You</Text>
+          <View style={styles.headerTitleRow}>
+            <Image
+              source={require('../../assets/logo/bolt_logo.png')}
+              style={styles.headerLogo}
+              resizeMode="contain"
+            />
+            <Text style={styles.headerTitle}>For You</Text>
+          </View>
           <View style={styles.headerUnderline} />
         </View>
         <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
@@ -625,12 +633,21 @@ const styles = StyleSheet.create({
   headerContent: {
     flexDirection: 'column',
   },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: theme.spacing.xs,
+  },
+  headerLogo: {
+    width: 24,
+    height: 24,
+    marginRight: theme.spacing.sm,
+  },
   headerTitle: {
     fontSize: theme.fontSize['2xl'],
     fontWeight: theme.fontWeight.bold as any,
     color: theme.colors.neutral.white,
     fontFamily: 'CeraPro-Bold',
-    marginBottom: theme.spacing.xs,
   },
   headerUnderline: {
     width: 60,
